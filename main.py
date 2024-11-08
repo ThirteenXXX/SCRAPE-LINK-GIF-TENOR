@@ -1,125 +1,93 @@
-from . import utils
-from time import sleep
-import random
-import json
+import time
+import requests
+
+from web3.auto import w3
+from loguru import logger
+from eth_account.messages import encode_defunct
+from pyuseragents import random as random_useragent
 
 
-def get_user_information(users, driver=None, headless=True):
-    """ get user information if the "from_account" argument is specified """
+def create_wallet():
+    account = w3.eth.account.create()
+    return account.address, account.key.hex()
 
-    driver = utils.init_driver(headless=headless)
 
-    users_info = {}
+def create_signature(nonce: str, private_key: str):
+    message = encode_defunct(text=nonce)
+    signed_message = w3.eth.account.sign_message(message, private_key)
+    return signed_message.signature.hex()
 
-    for i, user in enumerate(users):
 
-        log_user_page(user, driver)
+def main():
+    for _ in range(count):
+        try:
+            with requests.Session() as client:
+                client.headers.update({
+                    'origin': 'https://zealy.io',
+                    'user-agent': random_useragent()})
 
-        if user is not None:
+                address, private_key = create_wallet()
 
-            try:
-                following = driver.find_element_by_xpath(
-                    '//a[contains(@href,"/following")]/span[1]/span[1]').text
-                followers = driver.find_element_by_xpath(
-                    '//a[contains(@href,"/followers")]/span[1]/span[1]').text
-            except Exception as e:
-                # print(e)
-                return
+                client.get(f'https://api.zealy.io/communities/invitations/{ref}')
+                logger.info('Sending wallet')
+                response = client.post('https://api.zealy.io/authentification/wallet/nonce',
+                                       json={
+                                           "address": address
+                                       })
+                data = response.json()
+                session_id = data['id']
+                nonce = data['nonce']
 
-            try:
-                element = driver.find_element_by_xpath('//div[contains(@data-testid,"UserProfileHeader_Items")]//a[1]')
-                website = element.get_attribute("href")
-            except Exception as e:
-                # print(e)
-                website = ""
+                logger.info('Verify signature')
+                signature = create_signature(nonce, private_key)
+                response = client.post(f'https://api.zealy.io/authentification/wallet/verify-signature?invitationId={ref}',
+                                       json={
+                                           "sessionId": session_id,
+                                           "signature": signature,
+                                           "network": 1
+                                       })
+                access_token = (response.headers)['Set-Cookie'].split(';')[0]
 
-            try:
-                desc = driver.find_element_by_xpath('//div[contains(@data-testid,"UserDescription")]').text
-            except Exception as e:
-                # print(e)
-                desc = ""
-            a = 0
-            try:
-                join_date = driver.find_element_by_xpath(
-                    '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[3]').text
-                birthday = driver.find_element_by_xpath(
-                    '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[2]').text
-                location = driver.find_element_by_xpath(
-                    '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[1]').text
-            except Exception as e:
-                # print(e)
-                try:
-                    join_date = driver.find_element_by_xpath(
-                        '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[2]').text
-                    span1 = driver.find_element_by_xpath(
-                        '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[1]').text
-                    if hasNumbers(span1):
-                        birthday = span1
-                        location = ""
-                    else:
-                        location = span1
-                        birthday = ""
-                except Exception as e:
-                    # print(e)
-                    try:
-                        join_date = driver.find_element_by_xpath(
-                            '//div[contains(@data-testid,"UserProfileHeader_Items")]/span[1]').text
-                        birthday = ""
-                        location = ""
-                    except Exception as e:
-                        # print(e)
-                        join_date = ""
-                        birthday = ""
-                        location = ""
-            print("--------------- " + user + " information : ---------------")
-            print("Following : ", following)
-            print("Followers : ", followers)
-            print("Location : ", location)
-            print("Join date : ", join_date)
-            print("Birth date : ", birthday)
-            print("Description : ", desc)
-            print("Website : ", website)
-            users_info[user] = [following, followers, join_date, birthday, location, website, desc]
+                client.headers.update({'cookie': access_token})
 
-            if i == len(users) - 1:
-                driver.close()
-                return users_info
+                client.patch('https://api.zealy.io/users/me',
+                             json={
+                                 "username": f'{address[:4]}...{address[-4:]}'
+                             })
+
+                logger.info('Completing a task')
+                if task_type == 1:
+                    client.post(f'https://api.zealy.io/communities/{name}/quests/{quest_id}/claim',
+                                data={
+                                    "questId": quest_id,
+                                    "type": 'none'
+                                })
+                else:
+                    client.post(f'https://api.zealy.io/communities/{name}/quests/{quest_id}/claim',
+                                data={
+                                    "value": "joined",
+                                    "questId": quest_id,
+                                    "type": 'telegram'
+                                })
+
+        except Exception as error:
+            logger.error(error)
         else:
-            print("You must specify the user")
-            continue
+            with open(f'{name}_registered.txt', 'a', encoding='utf-8') as f:
+                f.write(f'{address}:{private_key}\n')
+            logger.success('Successfully\n')
+
+        time.sleep(delay)
 
 
-def log_user_page(user, driver, headless=True):
-    sleep(random.uniform(1, 2))
-    driver.get('https://twitter.com/' + user)
-    sleep(random.uniform(1, 2))
+if __name__ == '__main__':
+    print("Bot Zealy @flamingoat\n")
 
+    task_type = input('Task type: daily claim(1) or telegram(2): ')
+    name = input('Name zealy: ')
+    quest_id = input('Quest id: ')
+    ref = input('Ref code: ')
+    count = int(input('Count: '))
+    delay = int(input('Delay(sec): '))
 
-def get_users_followers(users, env, verbose=1, headless=True, wait=2, limit=float('inf'), file_path=None):
-    followers = utils.get_users_follow(users, headless, env, "followers", verbose, wait=wait, limit=limit)
-
-    if file_path == None:
-        file_path = 'outputs/' + str(users[0]) + '_' + str(users[-1]) + '_' + 'followers.json'
-    else:
-        file_path = file_path + str(users[0]) + '_' + str(users[-1]) + '_' + 'followers.json'
-    with open(file_path, 'w') as f:
-        json.dump(followers, f)
-        print(f"file saved in {file_path}")
-    return followers
-
-
-def get_users_following(users, env, verbose=1, headless=True, wait=2, limit=float('inf'), file_path=None):
-    following = utils.get_users_follow(users, headless, env, "following", verbose, wait=wait, limit=limit)
-
-    if file_path == None:
-        file_path = 'outputs/' + str(users[0]) + '_' + str(users[-1]) + '_' + 'following.json'
-    else:
-        file_path = file_path + str(users[0]) + '_' + str(users[-1]) + '_' + 'following.json'
-    with open(file_path, 'w') as f:
-        json.dump(following, f)
-        print(f"file saved in {file_path}")
-    return following
-
-
-def hasNumbers(inputString):
-    return any(char.isdigit() for char in inputString)
+    main()
