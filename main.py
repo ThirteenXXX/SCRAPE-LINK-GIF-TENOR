@@ -1,22 +1,39 @@
 import requests
 from bs4 import BeautifulSoup
+import time
 
-def print_thirteen_x():
-    art = r"""
+ascii_art = r'''
   ________    _      __                 _  __
  /_  __/ /_  (_)____/ /____  ___  ____ | |/ /
   / / / __ \/ / ___/ __/ _ \/ _ \/ __ \|   / 
  / / / / / / / /  / /_/  __/  __/ / / /   |  
 /_/ /_/ /_/_/_/   \__/\___/\___/_/ /_/_/|_|  
-             
+
              >>>  SCRAPE LINK GIF TENOR.COM
 ============================================
                         >>>  @ThirteenX_bot
 ============================================
-    """
-    print(art)
+'''
 
-print_thirteen_x()
+def gradient_text(text, colors):
+    colored_text = ""
+    color_index = 0
+    for char in text:
+        if char == ' ':
+            colored_text += " "
+        else:
+            colored_text += f"\033[{colors[color_index]}m{char}\033[0m"
+        color_index = (color_index + 1) % len(colors)
+    return colored_text
+
+colors = [
+    '32',
+]
+
+colored_ascii = gradient_text(ascii_art, colors)
+
+print(colored_ascii)
+
 
 search_query = input("Masukkan Kata Kunci Pencarian GIF: ")
 formatted_query = search_query.replace(' ', '-')
@@ -71,4 +88,3 @@ else:
         print(f"Nice, Link berhasil dikirim ke @ThirteenX_bot Telegram.")
     else:
         print(f"Gagal mengirim file. Status code: {response.status_code}")
-        
