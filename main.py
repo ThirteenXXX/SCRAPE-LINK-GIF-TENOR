@@ -1,93 +1,104 @@
-import time
+import random
 import requests
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
-from web3.auto import w3
-from loguru import logger
-from eth_account.messages import encode_defunct
-from pyuseragents import random as random_useragent
+# Set up a list of random user agents
+user_agents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    # Add more user agents as needed
+]
 
+# Telegram bot credentials
+telegram_token = '7590799899:AAGWjV76tWQCT7ddebglJ09Iv6AigWhg17E'
+chat_id = '6065149701'
 
-def create_wallet():
-    account = w3.eth.account.create()
-    return account.address, account.key.hex()
+# Twitter handle to monitor
+handle = input("Enter Twitter handle to monitor: ")
+twitter_url = f'https://x.com/{handle}'
 
+# Function to set up a new Selenium WebDriver with a random user agent and cookies
+def setup_driver():
+    # Randomly select a user agent from the list
+    user_agent = random.choice(user_agents)
+    options = Options()
+    options.add_argument(f'user-agent={user_agent}')
+    options.add_argument('--headless')  # Run in headless mode for background execution
+    options.add_argument('--disable-blink-features=AutomationControlled')
 
-def create_signature(nonce: str, private_key: str):
-    message = encode_defunct(text=nonce)
-    signed_message = w3.eth.account.sign_message(message, private_key)
-    return signed_message.signature.hex()
+    # Set up the WebDriver
+    service = Service('/path/to/chromedriver')  # Update path to your chromedriver
+    driver = webdriver.Chrome(service=service, options=options)
 
+    # Rotate cookies: You can set new cookies if needed here
+    driver.get("https://x.com")
+    time.sleep(2)  # Wait for the page to load
 
-def main():
-    for _ in range(count):
-        try:
-            with requests.Session() as client:
-                client.headers.update({
-                    'origin': 'https://zealy.io',
-                    'user-agent': random_useragent()})
+    # Clear cookies and load any specific cookies if needed
+    driver.delete_all_cookies()
+    # Example of setting a specific cookie
+    driver.add_cookie({"name": "example_cookie", "value": "cookie_value_here"})
+    
+    return driver
 
-                address, private_key = create_wallet()
+def get_following_count(driver):
+    """Retrieve the following count from a Twitter profile."""
+    driver.get(twitter_url)
+    try:
+        # Wait until the following count element is visible
+        following_count_element = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.XPATH, "//a[contains(@href,'/following')]//span[1]"))
+        )
+        following_count = int(following_count_element.text.replace(',', ''))
+        return following_count
+    except Exception as e:
+        print("Error retrieving following count:", e)
+        return None
 
-                client.get(f'https://api.zealy.io/communities/invitations/{ref}')
-                logger.info('Sending wallet')
-                response = client.post('https://api.zealy.io/authentification/wallet/nonce',
-                                       json={
-                                           "address": address
-                                       })
-                data = response.json()
-                session_id = data['id']
-                nonce = data['nonce']
+def send_telegram_message(message):
+    """Send a message to Telegram."""
+    url = f'https://api.telegram.org/bot{telegram_token}/sendMessage'
+    data = {'chat_id': chat_id, 'text': message}
+    response = requests.post(url, data=data)
+    if response.status_code == 200:
+        print("Telegram notification sent.")
+    else:
+        print("Failed to send Telegram notification.")
 
-                logger.info('Verify signature')
-                signature = create_signature(nonce, private_key)
-                response = client.post(f'https://api.zealy.io/authentification/wallet/verify-signature?invitationId={ref}',
-                                       json={
-                                           "sessionId": session_id,
-                                           "signature": signature,
-                                           "network": 1
-                                       })
-                access_token = (response.headers)['Set-Cookie'].split(';')[0]
+# Initialize driver and get initial following count
+driver = setup_driver()
+try:
+    previous_following_count = get_following_count(driver)
+    print(f"Initial following count for {handle}: {previous_following_count}")
+except Exception as e:
+    print("Error retrieving initial following count:", e)
+    driver.quit()
+    exit()
 
-                client.headers.update({'cookie': access_token})
+# Loop to monitor changes in following count
+while True:
+    try:
+        # Rotate user-agent and cookies by creating a new driver
+        driver.quit()
+        driver = setup_driver()
 
-                client.patch('https://api.zealy.io/users/me',
-                             json={
-                                 "username": f'{address[:4]}...{address[-4:]}'
-                             })
+        current_following_count = get_following_count(driver)
+        if current_following_count is not None and current_following_count > previous_following_count:
+            new_follows = current_following_count - previous_following_count
+            message = f"{handle} just followed {new_follows} new accounts."
+            send_telegram_message(message)
+            previous_following_count = current_following_count
 
-                logger.info('Completing a task')
-                if task_type == 1:
-                    client.post(f'https://api.zealy.io/communities/{name}/quests/{quest_id}/claim',
-                                data={
-                                    "questId": quest_id,
-                                    "type": 'none'
-                                })
-                else:
-                    client.post(f'https://api.zealy.io/communities/{name}/quests/{quest_id}/claim',
-                                data={
-                                    "value": "joined",
-                                    "questId": quest_id,
-                                    "type": 'telegram'
-                                })
+        # Wait 60 seconds before checking again (adjust as needed)
+        time.sleep(60)
 
-        except Exception as error:
-            logger.error(error)
-        else:
-            with open(f'{name}_registered.txt', 'a', encoding='utf-8') as f:
-                f.write(f'{address}:{private_key}\n')
-            logger.success('Successfully\n')
-
-        time.sleep(delay)
-
-
-if __name__ == '__main__':
-    print("Bot Zealy @flamingoat\n")
-
-    task_type = input('Task type: daily claim(1) or telegram(2): ')
-    name = input('Name zealy: ')
-    quest_id = input('Quest id: ')
-    ref = input('Ref code: ')
-    count = int(input('Count: '))
-    delay = int(input('Delay(sec): '))
-
-    main()
+    except Exception as e:
+        print("Error:", e)
+        time.sleep(60)
