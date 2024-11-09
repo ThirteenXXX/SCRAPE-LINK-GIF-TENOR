@@ -2,17 +2,21 @@ import requests
 from bs4 import BeautifulSoup
 
 print("===========================================")
-print('BOT SCRAPING LINK GIF TENOR BY Thirteen𝕏')
+print('BOT SCRAPING GIF DARI TENOR BY Thirteen𝕏')
 print("===========================================")
 print('@ThirteenX_bot')
 print("==============")
 
-# Masukkan URL halaman Tenor
-url = input("Masukan Link Pencarian GIF: ")
+# Masukkan kata kunci pencarian GIF
+search_query = input("Masukkan Kata Kunci Pencarian GIF: ")
+formatted_query = search_query.replace(' ', '-')  # Mengganti spasi dengan tanda strip untuk URL
+
+# URL pencarian di Tenor dengan kata kunci yang diformat
+url = f"https://tenor.com/search/{formatted_query}-gifs"
 
 # Token bot Telegram dan chat ID
 telegram_token = '7590799899:AAGWjV76tWQCT7ddebglJ09Iv6AigWhg17E'
-chat_id = input("Masukan Chat Id: ")
+chat_id = input("Masukkan Chat Id: ")
 
 # Buat headers agar permintaan terlihat seperti dari browser
 headers = {
@@ -31,8 +35,8 @@ for a in soup.find_all('a', href=True):
         gif_url = "https://tenor.com" + href
         gif_links.append(gif_url)
 
-# Simpan hasil dalam file .txt
-file_path = 'Link_GIF.txt'
+# Simpan hasil dalam file .txt dengan nama file berdasarkan kata kunci
+file_path = f"LinkGIF_{formatted_query}.txt"
 with open(file_path, 'w') as f:
     for link in gif_links:
         f.write(link + '\n')
@@ -51,6 +55,6 @@ response = send_file_to_telegram(file_path, telegram_token, chat_id)
 
 # Cek apakah file berhasil dikirim
 if response.status_code == 200:
-    print("File berhasil dikirim ke @ThirteenX_bot Telegram.")
+    print(f"File '{file_path}' berhasil dikirim ke @ThirteenX_bot Telegram.")
 else:
     print(f"Gagal mengirim file. Status code: {response.status_code}")
