@@ -55,6 +55,6 @@ response = send_file_to_telegram(file_path, telegram_token, chat_id)
 
 # Cek apakah file berhasil dikirim
 if response.status_code == 200:
-    print(f"File '{file_path}' berhasil dikirim ke @ThirteenX_bot Telegram.")
+    print(f"File '{file_path}' Nice, Link berhasil dikirim ke @ThirteenX_bot Telegram.")
 else:
     print(f"Gagal mengirim file. Status code: {response.status_code}")
